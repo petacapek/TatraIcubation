@@ -1,0 +1,14 @@
+#R
+*.Rproj
+*.Rhistory
+.Rproj.user
+.RData
+#No excel file
+*.xlsx
+#No temporary files
+.~lock.*
+#No figures
+*.png
+*.pdf
+*.pptx
+
