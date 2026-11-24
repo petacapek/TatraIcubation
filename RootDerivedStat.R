@@ -642,6 +642,69 @@ RootAmendedStable_RootderivedFig <- RootStable %>%
 ggsave("StatOut/RootAmendedStable_RootderivedFig.pdf", RootAmendedStable_RootderivedFig,
        width = 300, height = 180, units = "mm", device = cairo_pdf)
 
+#=================Predicted respiration rates - continuous time dependent change in constant thermal regimes
+#Simulations are stored here
+RootContinuous <- tibble(Locality = rep(unique(RootStable$Locality), each = 25*3),
+                         Time = rep(seq(0, 120, by = 5), times = 6*3),
+                         Temp = rep(rep(c(-5, 0, 5), each = 25), times = 6),
+                         yhat = numeric(length = length(Locality)),
+                         lwr = numeric(length = length(Locality)),
+                         upr = numeric(length = length(Locality)))
+RootContinuous <- TrRoots_cc |> group_by(Locality) |> summarise(C0 = mean(C0), .groups = "drop") |> 
+  merge(RootContinuous, by = "Locality")
+
+for(i in 1:nrow(RootContinuous)){
+  #Model parameters for row i
+  loc_i <- RootContinuous$Locality[i]
+  if(loc_i == 'FU'){
+    k_i = exp(boot_coefs_Pc_k[['logk.(Intercept)']] + boot_coefs_Pc_k[['logk.Temp']]*RootContinuous$Temp[i])
+    
+  } else {
+    k_i = exp(boot_coefs_Pc_k[['logk.(Intercept)']] + 
+                boot_coefs_Pc_k[[paste0('logk.Locality', loc_i)]] +
+                boot_coefs_Pc_k[['logk.Temp']]*RootContinuous$Temp[i])
+  }
+  
+  alfa_i =  plogis(boot_coefs_Pc_k[['logit_a.(Intercept)']] + 
+                     boot_coefs_Pc_k[['logit_a.Temp']]*RootContinuous$Temp[i])
+  
+  
+  
+  #Prediction for row i
+  RootContinuous[i, c('yhat', 'lwr', 'upr')] <- matrix(c(mean(RootContinuous$C0[i]*
+                                                            k_i*alfa_i*exp(-k_i*RootContinuous$Time[i])), 
+                                                     quantile(x = RootContinuous$C0[i]*
+                                                                k_i*alfa_i*exp(-k_i*RootContinuous$Time[i]),
+                                                              probs = c(0.05, 0.95))), nrow = 1)
+  
+  
+}
+
+RootSimulation_Fig <- 
+  RootContinuous %>%
+  mutate(Locality = factor(Locality,
+                           levels = c("SC", "VW", "NW", "FU", "JA", "RA"),
+                           labels = c(expression(atop("2160 m", "scree")),
+                                      expression(atop("2160 m", "meadow")),
+                                      expression(atop("2130 m", "meadow")),
+                                      expression(atop("1780 m", "meadow")),
+                                      expression(atop("1470 m", "forest")),
+                                      expression(atop("1330 m", "forest"))))) |> 
+  ggplot(aes(Time/30, yhat)) + 
+  geom_point(pch = 21, cex = 4, aes(fill = factor(Temp))) + 
+  facet_wrap(. ~ Locality, nrow = 2, labeller = label_parsed) +
+  mytheme + geom_line(aes(color = factor(Temp))) +
+  scale_fill_manual(values = c('white', 'grey', 'black')) +
+  scale_color_manual(values = c('black', 'black', 'black')) +
+  labs(color = 'Thermal regime', fill = "Thermal regime", x = 'Time (months)',
+       y = expression(paste("Root-derived respiration (", mu, "g C-C", O[2], " g ", DW^{-1}, "da", y^{-1}, ")"))) +
+  theme(legend.position = c(0.08, 0.68)) + scale_y_log10(limits = c(0.005, 100), breaks = c(0.01, 0.1, 1, 10, 100),
+                                                        labels = c(0.01, 0.1, 1, 10, 100)) +
+    geom_vline(xintercept = 2, col = 'blue') + geom_vline(xintercept = 4, col = 'red')
+
+ggsave("StatOut/RootSimulation_Fig.pdf", RootSimulation_Fig,
+       width = 320, height = 200, units = "mm", device = cairo_pdf)
+
 #=======================Fraction of root-derived respiration in respect to total respiration for alternating thermal regimes
 RootsFraction_AlternatingFig <- TrLongerFull %>% filter(Origin == 'Roots' & StabTemp == 'No') |> 
   mutate(Locality = factor(Locality,
